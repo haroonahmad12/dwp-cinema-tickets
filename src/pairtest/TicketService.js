@@ -1,15 +1,14 @@
 import InvalidPurchaseException from './lib/InvalidPurchaseException.js';
-
 import TicketPaymentService from "../thirdparty/paymentgateway/TicketPaymentService";
 import SeatReservationService from "../thirdparty/seatbooking/SeatReservationService.js";
 
-const TICKET_TYPE = {
+export const TICKET_TYPE = {
   ADULT: 'ADULT',
   CHILD: 'CHILD',
   INFANT: 'INFANT',
 };
 
-const TICKET_PRICE = {
+export const TICKET_PRICE = {
   ADULT: 20,
   CHILD: 10,
   INFANT: 0,
@@ -23,65 +22,76 @@ export default class TicketService {
   purchaseTickets(accountId, ...ticketTypeRequests) {
     // throws InvalidPurchaseException
 
-    let adultTickets;
-    let childTickets;
-    let infantTickets;
+    const { totalCost, adultTickets, childTickets, infantTickets, noOfSeats } = this.#mapDataFromTicketTypeRequests(...ticketTypeRequests);
+
+    // Handle invalid cases
 
     if (ticketTypeRequests.length === 0) {
       throw new InvalidPurchaseException('Please select at least one ticket type');
     }
 
-    if ( typeof accountId !== "number" ) {
+    if ( isNaN(accountId) || accountId < 0 ) {
       throw new InvalidPurchaseException('Incorrect account id');
     }
 
-    ticketTypeRequests.forEach((ticketTypeRequest) => {
-
-      switch (ticketTypeRequest.getTicketType()) {
-        case TICKET_TYPE.ADULT:
-          adultTickets = ticketTypeRequest.getNoOfTickets();
-          break;
-        case TICKET_TYPE.CHILD:
-          childTickets = ticketTypeRequest.getNoOfTickets();
-          break;
-        case TICKET_TYPE.INFANT:
-          infantTickets = ticketTypeRequest.getNoOfTickets();
-          break;
-        default:
-          throw new InvalidPurchaseException('Incorrect ticket type');
-      }
-      
-    });
-
+    
     if ((childTickets || infantTickets )&& !adultTickets) {
       throw new InvalidPurchaseException('Please select at least one adult ticket');
     }
 
     if (infantTickets && infantTickets > adultTickets) {
-      throw new InvalidPurchaseException('Infant sit on adult lap and cannot be more than the number of adults');
+      throw new InvalidPurchaseException('Infants have to sit on an adult lap, therefore the number of infants cannot be greater than the number of adults');
     }
 
-    if(adultTickets + childTickets  + infantTickets > 20) {
+    if(noOfSeats > 20) {
       throw new InvalidPurchaseException('Maximum 20 tickets can be purchased at a time');
     }
 
-    const totalCost = (adultTickets * TICKET_PRICE.ADULT) + (childTickets * TICKET_PRICE.CHILD) + (infantTickets * TICKET_PRICE.INFANT);
-    
-    const totalSeats = adultTickets + childTickets;
+    // If all the above conditions are met, then proceed with payment and seat reservation
 
     const ticketPaymentService = new TicketPaymentService();
     const seatReservationService = new SeatReservationService();
 
     try {
       // assuming that makePayment method returns true if payment is successful
-      const paymentRequest = ticketPaymentService.makePayment(accountId, totalCost)
+      const paymentRequest = ticketPaymentService.makePayment(accountId, totalCost);
       
       if (paymentRequest) {
-        seatReservationService.reserveSeats(totalSeats);
+        seatReservationService.reserveSeat(accountId, noOfSeats);
       }
     }
     catch (e) {
       throw new InvalidPurchaseException('Payment failed, please try again');
+    }
+  }
+
+  // private method to map out the data from the ticketTypeRequests
+
+  #mapDataFromTicketTypeRequests(...ticketTypeRequests) { 
+    let totalCost = 0;
+    let adultTickets = 0;
+    let childTickets = 0;
+    let infantTickets = 0;
+
+    ticketTypeRequests.forEach((req) => {
+      if (req.ticketType === TICKET_TYPE.ADULT) {
+        adultTickets += req.noOfTickets;
+        totalCost += req.noOfTickets * TICKET_PRICE.ADULT;
+      }
+      else if (req.ticketType === TICKET_TYPE.CHILD) {
+        childTickets += req.noOfTickets;
+        totalCost += req.noOfTickets * TICKET_PRICE.CHILD;
+      }
+      else if (req.ticketType === TICKET_TYPE.INFANT) {
+        infantTickets += req.noOfTickets;
+      }
+    });
+    return {
+      totalCost,
+      adultTickets,
+      childTickets,
+      infantTickets,
+      noOfSeats: adultTickets + childTickets + infantTickets
     }
   }
 }
