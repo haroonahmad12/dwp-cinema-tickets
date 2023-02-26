@@ -59,6 +59,8 @@ export default class TicketService {
       if (paymentRequest) {
         seatReservationService.reserveSeat(accountId, noOfSeats);
       }
+
+      return totalCost;
     }
     catch (e) {
       throw new InvalidPurchaseException('Payment failed, please try again');
@@ -74,17 +76,23 @@ export default class TicketService {
     let infantTickets = 0;
 
     ticketTypeRequests.forEach((req) => {
-      if (req.ticketType === TICKET_TYPE.ADULT) {
-        adultTickets += req.noOfTickets;
-        totalCost += req.noOfTickets * TICKET_PRICE.ADULT;
+      switch (req.getTicketType()) {
+        case TICKET_TYPE.ADULT:
+          adultTickets += req.getNoOfTickets();
+          totalCost += adultTickets * TICKET_PRICE.ADULT;
+          break;
+        case TICKET_TYPE.CHILD:
+          childTickets += req.getNoOfTickets();
+          totalCost += childTickets * TICKET_PRICE.CHILD;
+          break;
+        case TICKET_TYPE.INFANT:
+          infantTickets += req.getNoOfTickets();
+          totalCost += infantTickets * TICKET_PRICE.INFANT;
+          break;
+        default:
+          break;
       }
-      else if (req.ticketType === TICKET_TYPE.CHILD) {
-        childTickets += req.noOfTickets;
-        totalCost += req.noOfTickets * TICKET_PRICE.CHILD;
-      }
-      else if (req.ticketType === TICKET_TYPE.INFANT) {
-        infantTickets += req.noOfTickets;
-      }
+
     });
     return {
       totalCost,
